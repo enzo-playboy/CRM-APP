@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card'
 import { UnreadBadge } from '@/components/ui/UnreadBadge'
 import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -81,6 +82,8 @@ export default function ContactsPage() {
     estado: 'lead',
     temperatura: 'frio',
     historico_pagamento: '',
+    has_automation: false,
+    has_website: false,
   })
 
   useEffect(() => {
@@ -101,7 +104,12 @@ export default function ContactsPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setLeads(data || [])
+      
+      const formattedLeads = (data || []).map((lead: any) => ({
+        ...lead,
+        temperatura: (lead.temperatura || lead.Temperatura || '').toLowerCase()
+      }))
+      setLeads(formattedLeads)
     } catch (error) {
       console.error('Erro ao buscar leads:', error)
       toast.error('Erro ao carregar contatos')
@@ -113,18 +121,30 @@ export default function ContactsPage() {
   const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('leads').insert(newLead)
+      const { data: { user } } = await supabase.auth.getUser()
+      const { historico_pagamento, temperatura, has_automation, has_website, ...leadData } = newLead
+      const { error } = await supabase.from('leads').insert({
+        ...leadData,
+        Temperatura: temperatura ? temperatura.toUpperCase() : null,
+        metadata: {
+          historico_pagamento,
+          has_automation,
+          has_website
+        },
+        user_id: user?.id,
+      })
       if (error) throw error
       setShowAddModal(false)
       setNewLead({
         name: '', email: '', phone: '', company: '', nicho: '',
         instagram: '', estado: 'lead', temperatura: 'frio', historico_pagamento: '',
+        has_automation: false, has_website: false
       })
       fetchLeads()
       toast.success('Contato adicionado com sucesso!')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao adicionar lead:', error)
-      toast.error('Erro ao adicionar contato')
+      toast.error(`Erro ao adicionar contato: ${error.message || error.description || JSON.stringify(error)}`)
     }
   }
 
@@ -314,6 +334,24 @@ export default function ContactsPage() {
                   </Select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center justify-between p-3 bg-white/70 backdrop-blur-sm border border-white/50 rounded-2xl">
+                  <Label htmlFor="has_website" className="cursor-pointer text-xs font-semibold text-text-secondary">Possui Site?</Label>
+                  <Switch
+                    id="has_website"
+                    checked={newLead.has_website}
+                    onCheckedChange={(checked) => setNewLead({ ...newLead, has_website: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-white/70 backdrop-blur-sm border border-white/50 rounded-2xl">
+                  <Label htmlFor="has_automation" className="cursor-pointer text-xs font-semibold text-text-secondary">Possui Automação?</Label>
+                  <Switch
+                    id="has_automation"
+                    checked={newLead.has_automation}
+                    onCheckedChange={(checked) => setNewLead({ ...newLead, has_automation: checked })}
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="historico">Histórico de Pagamento</Label>
                 <textarea
@@ -420,6 +458,20 @@ export default function ContactsPage() {
                       {statusConfig.label}
                     </Badge>
                   </div>
+                  {(lead.metadata?.has_website || lead.metadata?.has_automation) && (
+                    <div className="flex gap-1.5 mt-1">
+                      {lead.metadata?.has_website && (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 rounded-lg text-[10px] px-2 py-0.5 font-semibold">
+                          Possui Site
+                        </Badge>
+                      )}
+                      {lead.metadata?.has_automation && (
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 rounded-lg text-[10px] px-2 py-0.5 font-semibold">
+                          Possui Automação
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 pt-4 border-t border-white/30">

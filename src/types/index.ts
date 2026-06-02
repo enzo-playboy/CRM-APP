@@ -12,6 +12,7 @@ export interface Lead {
   created_at: string
   updated_at?: string
   user_id?: string
+  metadata?: any
 }
 
 export interface Conversa {

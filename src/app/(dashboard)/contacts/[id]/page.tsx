@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ContactMessages } from '@/components/features/ContactMessages'
 import { ContactProjects } from '@/components/features/ContactProjects'
 import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+import { Switch } from '@/components/ui/switch'
 import {
   ArrowLeft,
   Mail,
@@ -68,8 +69,12 @@ export default function ContactDetailPage() {
         .single()
 
       if (error) throw error
-      setLead(data)
-      setEditData(data)
+      const formattedLead = {
+        ...data,
+        temperatura: (data.temperatura || data.Temperatura || '').toLowerCase()
+      }
+      setLead(formattedLead)
+      setEditData(formattedLead)
     } catch (error) {
       console.error('Erro ao buscar contato:', error)
       toast.error('Erro ao carregar contato')
@@ -90,9 +95,14 @@ export default function ContactDetailPage() {
 
   const handleSave = async () => {
     try {
+      const { temperatura, Temperatura, ...restEditData } = editData as any
+      const finalTemp = (temperatura || Temperatura || '').toUpperCase()
       const { error } = await supabase
         .from('leads')
-        .update(editData)
+        .update({
+          ...restEditData,
+          Temperatura: finalTemp || null
+        })
         .eq('id', id)
 
       if (error) throw error
@@ -307,6 +317,50 @@ export default function ContactDetailPage() {
                   ) : (
                     <span className="text-gray-700">{lead.instagram || '-'}</span>
                   )}
+                 </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Globe className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-700">Possui Site:</span>
+                  </div>
+                  {isEditing ? (
+                    <Switch
+                      checked={editData.metadata?.has_website || false}
+                      onCheckedChange={(checked) => setEditData({
+                        ...editData,
+                        metadata: {
+                          ...(editData.metadata || {}),
+                          has_website: checked
+                        }
+                      })}
+                    />
+                  ) : (
+                    <Badge variant={lead.metadata?.has_website ? "default" : "secondary"}>
+                      {lead.metadata?.has_website ? "Sim" : "Não"}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Flame className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-700">Possui Automação:</span>
+                  </div>
+                  {isEditing ? (
+                    <Switch
+                      checked={editData.metadata?.has_automation || false}
+                      onCheckedChange={(checked) => setEditData({
+                        ...editData,
+                        metadata: {
+                          ...(editData.metadata || {}),
+                          has_automation: checked
+                        }
+                      })}
+                    />
+                  ) : (
+                    <Badge variant={lead.metadata?.has_automation ? "default" : "secondary"}>
+                      {lead.metadata?.has_automation ? "Sim" : "Não"}
+                    </Badge>
+                  )}
                 </div>
               </div>
 
@@ -362,10 +416,10 @@ export default function ContactDetailPage() {
               </div>
 
               {/* Histórico de Pagamento */}
-              {lead.historico_pagamento && (
+              {(lead.historico_pagamento || lead.metadata?.historico_pagamento) && (
                 <div className="md:col-span-2 p-4 bg-amber-50 border border-amber-100 rounded-lg">
                   <p className="text-sm font-semibold text-amber-700 mb-2">Histórico de Pagamento</p>
-                  <p className="text-sm text-amber-800 whitespace-pre-wrap">{lead.historico_pagamento}</p>
+                  <p className="text-sm text-amber-800 whitespace-pre-wrap">{lead.historico_pagamento || lead.metadata?.historico_pagamento}</p>
                 </div>
               )}
             </div>

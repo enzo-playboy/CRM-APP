@@ -13,6 +13,8 @@ export interface Lead {
   updated_at?: string
   user_id?: string
   metadata?: any
+  notes?: string
+  tags?: string[]
 }
 
 export interface Conversa {
@@ -118,6 +120,7 @@ export interface Expense {
   recurring: boolean
   created_at: string
   user_id?: string
+  lead_id?: string
 }
 
 export interface Revenue {
@@ -212,6 +215,7 @@ export interface Goal {
   month: number
   year: number
   monthly_leads_goal: number
+  daily_leads_goal: number
   revenue_goal: number
   projects_goal: number
   response_time_goal: number

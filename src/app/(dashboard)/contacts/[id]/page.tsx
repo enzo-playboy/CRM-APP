@@ -71,6 +71,9 @@ export default function ContactDetailPage() {
       if (error) throw error
       const formattedLead = {
         ...data,
+        estado: (data.estado || '').toLowerCase(),
+        notes: data.notes || data.metadata?.notes || '',
+        tags: data.tags || data.metadata?.tags || [],
         temperatura: (data.temperatura || data.Temperatura || '').toLowerCase()
       }
       setLead(formattedLead)
@@ -95,13 +98,33 @@ export default function ContactDetailPage() {
 
   const handleSave = async () => {
     try {
-      const { temperatura, Temperatura, ...restEditData } = editData as any
+      const { temperatura, Temperatura, email, instagram, phone, company, nicho, notes, tags, ...restEditData } = editData as any
+      
+      const formattedEmail = email?.trim() || null
+      const formattedInstagram = instagram?.trim() || null
+      const formattedPhone = phone?.trim() || null
+      const formattedCompany = company?.trim() || null
+      const formattedNicho = nicho?.trim() || null
+      
       const finalTemp = (temperatura || Temperatura || '').toUpperCase()
+      
       const { error } = await supabase
         .from('leads')
         .update({
           ...restEditData,
-          Temperatura: finalTemp || null
+          email: formattedEmail,
+          instagram: formattedInstagram,
+          phone: formattedPhone,
+          company: formattedCompany,
+          nicho: formattedNicho,
+          notes: notes || null,
+          tags: tags || [],
+          Temperatura: finalTemp || null,
+          metadata: {
+            ...(restEditData.metadata || {}),
+            notes: notes || null,
+            tags: tags || [],
+          }
         })
         .eq('id', id)
 
@@ -409,10 +432,51 @@ export default function ContactDetailPage() {
                     <span className="font-medium">{tempConfig.label}</span>
                   )}
                 </div>
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg flex-wrap">
+                  <span className="text-sm text-gray-500 w-20">Tags:</span>
+                  {isEditing ? (
+                    <input
+                      value={editData.tags?.join(', ') || ''}
+                      onChange={(e) => setEditData({ ...editData, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+                      placeholder="Ex: Contato Inicial, Conversando"
+                      className="flex-1 px-3 py-1 border rounded-lg text-sm bg-white"
+                    />
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {(lead.tags || lead.metadata?.tags || []).length > 0 ? (
+                        (lead.tags || lead.metadata?.tags || []).map((tag: string) => (
+                          <Badge key={tag} variant="outline" className="bg-primary-50 text-primary-700 border-primary-200 text-[10px]">
+                            {tag}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-sm">Nenhuma tag</span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-500 mb-1">Criado em:</p>
                   <p className="text-gray-700">{new Date(lead.created_at).toLocaleDateString('pt-BR')}</p>
                 </div>
+              </div>
+
+              {/* Observações / Anotações */}
+              <div className="md:col-span-2 p-4 bg-white border border-gray-200 rounded-xl space-y-2">
+                <p className="text-sm font-semibold text-gray-700">Observações / Anotações</p>
+                {isEditing ? (
+                  <textarea
+                    value={editData.notes || ''}
+                    onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
+                    placeholder="Adicione anotações e observações sobre este contato..."
+                    rows={4}
+                    className="w-full px-4 py-3 border rounded-xl text-gray-700"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg min-h-[80px]">
+                    {lead.notes || lead.metadata?.notes || 'Nenhuma observação cadastrada.'}
+                  </p>
+                )}
               </div>
 
               {/* Histórico de Pagamento */}

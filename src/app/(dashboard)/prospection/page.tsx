@@ -56,7 +56,13 @@ export default function ProspectionPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setLeads(data || [])
+      
+      const formattedLeads = (data || []).map((lead: any) => ({
+        ...lead,
+        estado: (lead.estado || '').toLowerCase(),
+        temperatura: (lead.temperatura || lead.Temperatura || '').toLowerCase()
+      }))
+      setLeads(formattedLeads)
     } catch (error) {
       console.error('Erro ao buscar leads:', error)
     } finally {

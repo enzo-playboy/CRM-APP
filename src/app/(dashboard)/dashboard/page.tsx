@@ -31,6 +31,10 @@ import {
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [dailyGoalStats, setDailyGoalStats] = useState({
+    todayLeads: 0,
+    dailyGoal: 0,
+  })
   const [stats, setStats] = useState({
     totalLeads: 0,
     conversionRate: 0,
@@ -50,17 +54,58 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setLeads(data || [])
 
-      const total = data?.length || 0
-      const clients = data?.filter(l => l.estado === 'client').length || 0
-      const conversionRate = total > 0 ? (clients / total) * 100 : 0
+      const formattedLeads = (data || []).map((lead: any) => ({
+        ...lead,
+        estado: (lead.estado || '').toLowerCase(),
+        temperatura: (lead.temperatura || lead.Temperatura || '').toLowerCase()
+      }))
+      setLeads(formattedLeads)
+
+      const total = formattedLeads.length
+      const clientsCount = formattedLeads.filter(l => l.estado === 'client').length
+      const conversionRate = total > 0 ? (clientsCount / total) * 100 : 0
+
+      // Buscar metas de leads ativa
+      const currentMonth = new Date().getMonth() + 1
+      const currentYear = new Date().getFullYear()
+      const { data: { user } } = await supabase.auth.getUser()
+      let monthlyGoal = 100
+      let dailyGoal = 0
+      
+      if (user) {
+        const { data: goalData } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('month', currentMonth)
+          .eq('year', currentYear)
+          .single()
+        if (goalData) {
+          monthlyGoal = goalData.monthly_leads_goal || 100
+          dailyGoal = goalData.daily_leads_goal || 0
+        }
+      }
+
+      const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local format
+      const todayLeadsCount = formattedLeads.filter((l: any) => {
+        if (!l.created_at) return false
+        const leadDate = new Date(l.created_at).toLocaleDateString('en-CA')
+        return leadDate === today
+      }).length
+
+      setDailyGoalStats({
+        todayLeads: todayLeadsCount,
+        dailyGoal: dailyGoal,
+      })
+
+      const goalProgress = monthlyGoal > 0 ? (total / monthlyGoal) * 100 : 0
 
       setStats({
         totalLeads: total,
         conversionRate: Number(conversionRate.toFixed(1)),
         monthlyRevenue: 32000,
-        goalProgress: 75,
+        goalProgress: Math.min(100, Math.round(goalProgress)),
       })
     } catch (error) {
       console.error('Erro ao buscar leads:', error)
@@ -104,7 +149,7 @@ export default function DashboardPage() {
         <p className="text-text-muted mt-1">Visão geral do seu pipeline de prospecção.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
         <div className="glass rounded-3xl p-6 shadow-glass hover:shadow-glass-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-400 rounded-2xl flex items-center justify-center shadow-glow">
@@ -149,6 +194,20 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm text-text-muted font-medium">Meta Mês</p>
               <p className="text-3xl font-bold text-text-primary">{stats.goalProgress}%</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass rounded-3xl p-6 shadow-glass hover:shadow-glass-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-indigo-400 rounded-2xl flex items-center justify-center shadow-glow">
+              <Target className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <p className="text-sm text-text-muted font-medium">Meta Diária</p>
+              <p className="text-3xl font-bold text-text-primary">
+                {dailyGoalStats.todayLeads} / {dailyGoalStats.dailyGoal}
+              </p>
             </div>
           </div>
         </div>

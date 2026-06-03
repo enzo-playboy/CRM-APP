@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { Expense, ExpenseCategory } from '@/types'
+import type { Expense, ExpenseCategory, Lead } from '@/types'
 
 interface ExpenseFormProps {
   onExpenseCreated?: () => void
@@ -25,6 +25,27 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
   const [isSaving, setIsSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
 
+  // Estados adicionais para parcelamento e associação com cliente (Lead)
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [selectedLeadId, setSelectedLeadId] = useState('')
+  const [isInstallments, setIsInstallments] = useState(false)
+  const [installmentsCount, setInstallmentsCount] = useState(2)
+
+  useEffect(() => {
+    const fetchLeadsList = async () => {
+      try {
+        const { data } = await supabase
+          .from('leads')
+          .select('id, name, company')
+          .order('name', { ascending: true })
+        setLeads((data || []) as Lead[])
+      } catch (err) {
+        console.error('Erro ao buscar leads para despesa:', err)
+      }
+    }
+    fetchLeadsList()
+  }, [])
+
   useEffect(() => {
     if (expenseToEdit) {
       setFormData({
@@ -34,6 +55,8 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
         date: expenseToEdit.date,
         recurring: expenseToEdit.recurring,
       })
+      setSelectedLeadId(expenseToEdit.lead_id || '')
+      setIsInstallments(false)
     }
   }, [expenseToEdit])
 
@@ -56,11 +79,27 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
             amount: parseFloat(formData.amount),
             date: formData.date,
             recurring: formData.recurring,
+            lead_id: selectedLeadId || null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', expenseToEdit.id)
 
-        if (error) throw error
+        if (error) {
+          console.warn("Falha ao salvar despesa com lead_id, tentando fallback sem a coluna...", error)
+          // Fallback se a coluna lead_id não existir no banco remoto
+          const { error: fallbackError } = await supabase
+            .from('expenses')
+            .update({
+              category: formData.category,
+              description: formData.description,
+              amount: parseFloat(formData.amount),
+              date: formData.date,
+              recurring: formData.recurring,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', expenseToEdit.id)
+          if (fallbackError) throw fallbackError
+        }
         setShowSuccess(true)
         setTimeout(() => {
           setShowSuccess(false)
@@ -69,16 +108,85 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
         }, 1500)
       } else {
         // Modo criação
-        const { error } = await supabase.from('expenses').insert({
-          category: formData.category,
-          description: formData.description,
-          amount: parseFloat(formData.amount),
-          date: formData.date,
-          recurring: formData.recurring,
-          user_id: user?.id,
-        })
+        if (isInstallments && installmentsCount > 1) {
+          const totalAmount = parseFloat(formData.amount)
+          const installmentAmount = parseFloat((totalAmount / installmentsCount).toFixed(2))
+          const baseDate = new Date(formData.date + 'T12:00:00') // evitar timezone shift
 
-        if (error) throw error
+          // Tentar inserir com lead_id
+          try {
+            const expensePromises = []
+            for (let i = 0; i < installmentsCount; i++) {
+              const installmentDate = new Date(baseDate)
+              installmentDate.setMonth(baseDate.getMonth() + i)
+              const dateStr = installmentDate.toISOString().split('T')[0]
+
+              expensePromises.push(
+                supabase.from('expenses').insert({
+                  category: formData.category,
+                  description: `${formData.description} (${i + 1}/${installmentsCount})`,
+                  amount: installmentAmount,
+                  date: dateStr,
+                  recurring: false,
+                  lead_id: selectedLeadId || null,
+                  user_id: user?.id,
+                })
+              )
+            }
+
+            const results = await Promise.all(expensePromises)
+            const errorResult = results.find(r => r.error)
+            if (errorResult) throw errorResult.error
+          } catch (err) {
+            console.warn("Falha ao salvar parcelas com lead_id, tentando fallback sem a coluna...", err)
+            // Fallback sem a coluna lead_id
+            const expensePromises = []
+            for (let i = 0; i < installmentsCount; i++) {
+              const installmentDate = new Date(baseDate)
+              installmentDate.setMonth(baseDate.getMonth() + i)
+              const dateStr = installmentDate.toISOString().split('T')[0]
+
+              expensePromises.push(
+                supabase.from('expenses').insert({
+                  category: formData.category,
+                  description: `${formData.description} (${i + 1}/${installmentsCount})`,
+                  amount: installmentAmount,
+                  date: dateStr,
+                  recurring: false,
+                  user_id: user?.id,
+                })
+              )
+            }
+            const results = await Promise.all(expensePromises)
+            const errorResult = results.find(r => r.error)
+            if (errorResult) throw errorResult.error
+          }
+        } else {
+          const { error } = await supabase.from('expenses').insert({
+            category: formData.category,
+            description: formData.description,
+            amount: parseFloat(formData.amount),
+            date: formData.date,
+            recurring: formData.recurring,
+            lead_id: selectedLeadId || null,
+            user_id: user?.id,
+          })
+
+          if (error) {
+            console.warn("Falha ao salvar despesa com lead_id, tentando fallback sem a coluna...", error)
+            // Fallback se a coluna lead_id não existir no banco remoto
+            const { error: fallbackError } = await supabase.from('expenses').insert({
+              category: formData.category,
+              description: formData.description,
+              amount: parseFloat(formData.amount),
+              date: formData.date,
+              recurring: formData.recurring,
+              user_id: user?.id,
+            })
+            if (fallbackError) throw fallbackError
+          }
+        }
+
         setShowSuccess(true)
         setTimeout(() => {
           setShowSuccess(false)
@@ -89,6 +197,9 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
             date: new Date().toISOString().split('T')[0],
             recurring: false,
           })
+          setSelectedLeadId('')
+          setIsInstallments(false)
+          setInstallmentsCount(2)
           onExpenseCreated?.()
         }, 1500)
       }
@@ -108,6 +219,9 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
       date: new Date().toISOString().split('T')[0],
       recurring: false,
     })
+    setSelectedLeadId('')
+    setIsInstallments(false)
+    setInstallmentsCount(2)
     onEditCancel?.()
   }
 
@@ -154,9 +268,25 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
             />
           </div>
 
+          <div className="space-y-2">
+            <Label>Vincular a Cliente (Opcional)</Label>
+            <select
+              value={selectedLeadId}
+              onChange={(e) => setSelectedLeadId(e.target.value)}
+              className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Nenhum cliente</option>
+              {leads.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} {l.company ? `(${l.company})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Valor (R$)</Label>
+              <Label>{isInstallments ? 'Valor Total (R$)' : 'Valor (R$)'}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -178,10 +308,45 @@ export function ExpenseForm({ onExpenseCreated, expenseToEdit, onEditCancel }: E
             </div>
           </div>
 
+          {!expenseToEdit && (
+            <div className="space-y-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isInstallments}
+                  onChange={(e) => {
+                    setIsInstallments(e.target.checked)
+                    if (e.target.checked) {
+                      setFormData(prev => ({ ...prev, recurring: false }))
+                    }
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 font-medium">Dividir esta despesa em parcelas</span>
+              </label>
+
+              {isInstallments && (
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="installments_count" className="text-xs text-gray-600">Número de parcelas:</Label>
+                  <Input
+                    id="installments_count"
+                    type="number"
+                    min="2"
+                    max="60"
+                    value={installmentsCount}
+                    onChange={(e) => setInstallmentsCount(Math.max(2, parseInt(e.target.value) || 2))}
+                    className="w-20 h-8 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={formData.recurring}
+              disabled={isInstallments}
               onChange={(e) => setFormData({ ...formData, recurring: e.target.checked })}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />

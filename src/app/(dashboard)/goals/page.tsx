@@ -15,6 +15,7 @@ import {
 
 interface GoalData {
   monthly_leads_goal: number
+  daily_leads_goal: number
   revenue_goal: number
   projects_goal: number
   response_time_goal: number
@@ -22,6 +23,7 @@ interface GoalData {
 
 interface CurrentStats {
   totalLeads: number
+  todayLeads: number
   totalRevenue: number
   totalProjects: number
   avgResponseTime: number
@@ -30,12 +32,14 @@ interface CurrentStats {
 export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalData>({
     monthly_leads_goal: 100,
+    daily_leads_goal: 5,
     revenue_goal: 50000,
     projects_goal: 10,
     response_time_goal: 2,
   })
   const [stats, setStats] = useState<CurrentStats>({
     totalLeads: 0,
+    todayLeads: 0,
     totalRevenue: 0,
     totalProjects: 0,
     avgResponseTime: 1.5,
@@ -67,10 +71,11 @@ export default function GoalsPage() {
 
       if (data) {
         setGoals({
-          monthly_leads_goal: data.monthly_leads_goal,
-          revenue_goal: data.revenue_goal,
-          projects_goal: data.projects_goal,
-          response_time_goal: data.response_time_goal,
+          monthly_leads_goal: data.monthly_leads_goal || 0,
+          daily_leads_goal: data.daily_leads_goal || 0,
+          revenue_goal: data.revenue_goal || 0,
+          projects_goal: data.projects_goal || 0,
+          response_time_goal: data.response_time_goal || 0,
         })
       }
     } catch (error) {
@@ -80,17 +85,45 @@ export default function GoalsPage() {
 
   const fetchStats = async () => {
     try {
-      const { count: totalLeads } = await supabase
+      const { data: leadsData } = await supabase
         .from('leads')
-        .select('*', { count: 'exact', head: true })
+        .select('*')
+
+      const totalLeads = leadsData?.length || 0
+      const today = new Date().toLocaleDateString('en-CA')
+      const todayLeads = (leadsData || []).filter((l: any) => {
+        if (!l.created_at) return false
+        const leadDate = new Date(l.created_at).toLocaleDateString('en-CA')
+        return leadDate === today
+      }).length
 
       const { count: totalProjects } = await supabase
         .from('projects')
         .select('*', { count: 'exact', head: true })
 
+      let totalRevenue = 0
+      try {
+        const startOfMonth = new Date(currentYear, currentMonth - 1, 1).toISOString().split('T')[0]
+        const endOfMonth = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0]
+        const { data: revenueData, error: revError } = await supabase
+          .from('revenues_manual')
+          .select('amount')
+          .eq('status', 'received')
+          .gte('date', startOfMonth)
+          .lte('date', endOfMonth)
+        if (!revError && revenueData) {
+          totalRevenue = revenueData.reduce((sum, r) => sum + (r.amount || 0), 0)
+        } else {
+          totalRevenue = 0
+        }
+      } catch (err) {
+        totalRevenue = 0
+      }
+
       setStats({
-        totalLeads: totalLeads || 0,
-        totalRevenue: 32000,
+        totalLeads: totalLeads,
+        todayLeads: todayLeads,
+        totalRevenue: totalRevenue,
         totalProjects: totalProjects || 0,
         avgResponseTime: 1.5,
       })
@@ -114,6 +147,7 @@ export default function GoalsPage() {
           month: currentMonth,
           year: currentYear,
           monthly_leads_goal: goals.monthly_leads_goal,
+          daily_leads_goal: goals.daily_leads_goal,
           revenue_goal: goals.revenue_goal,
           projects_goal: goals.projects_goal,
           response_time_goal: goals.response_time_goal,
@@ -164,6 +198,15 @@ export default function GoalsPage() {
       field: 'monthly_leads_goal' as keyof GoalData,
       suffix: 'leads',
       color: 'from-primary-500 to-primary-400',
+    },
+    {
+      title: 'Leads por Dia',
+      icon: Users,
+      value: goals.daily_leads_goal,
+      current: stats.todayLeads,
+      field: 'daily_leads_goal' as keyof GoalData,
+      suffix: 'leads',
+      color: 'from-indigo-500 to-indigo-400',
     },
     {
       title: 'Meta de Faturamento',

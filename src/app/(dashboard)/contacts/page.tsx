@@ -69,7 +69,7 @@ export default function ContactsPage() {
   const [filterEstado, setFilterEstado] = useState<string>('all')
   const [filterTemperatura, setFilterTemperatura] = useState<string>('all')
   
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<'novo' | 'contato' | 'proposta' | 'client' | 'inactive' | null>(null)
 

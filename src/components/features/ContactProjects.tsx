@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Project } from '@/types'
-import { SERVICE_TYPES } from '@/types'
+import { SERVICE_TYPES, parseProject } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,7 +45,7 @@ export function ContactProjects({ leadId, onProjectCreated }: ContactProjectsPro
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setProjects(data || [])
+      setProjects((data || []).map(parseProject))
     } catch (error) {
       console.error('Erro ao buscar projetos:', error)
     } finally {

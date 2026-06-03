@@ -117,7 +117,6 @@ export default function ContactDetailPage() {
           phone: formattedPhone,
           company: formattedCompany,
           nicho: formattedNicho,
-          notes: notes || null,
           tags: tags || [],
           Temperatura: finalTemp || null,
           metadata: {

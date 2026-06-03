@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ProjectCalculator } from '@/components/features/ProjectCalculator'
 import type { Project } from '@/types'
-import { SERVICE_TYPES, DEADLINE_OPTIONS } from '@/types'
+import { SERVICE_TYPES, DEADLINE_OPTIONS, parseProject } from '@/types'
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -25,7 +25,7 @@ export default function ProjectsPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setProjects(data || [])
+      setProjects((data || []).map(parseProject))
     } catch (error) {
       console.error('Erro ao buscar projetos:', error)
     } finally {

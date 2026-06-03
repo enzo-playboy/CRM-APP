@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { supabase } from '@/lib/supabase'
-import type { Project, CalculatorData } from '@/types'
+import { parseProject, type Project, type CalculatorData } from '@/types'
 
 interface ProjectsState {
   projects: Project[]
@@ -33,7 +33,7 @@ export const fetchProjects = createAsyncThunk(
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return data || []
+    return (data || []).map(parseProject)
   }
 )
 
@@ -47,7 +47,7 @@ export const createProject = createAsyncThunk(
       .single()
 
     if (error) throw error
-    return data
+    return parseProject(data)
   }
 )
 
@@ -62,9 +62,10 @@ export const updateProject = createAsyncThunk(
       .single()
 
     if (error) throw error
-    return data
+    return parseProject(data)
   }
 )
+
 
 export const deleteProject = createAsyncThunk(
   'projects/deleteProject',

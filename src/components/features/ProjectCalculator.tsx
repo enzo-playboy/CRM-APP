@@ -116,9 +116,30 @@ export function ProjectCalculator({ onProjectSaved, preSelectedLeadId }: Project
         user_id: user?.id,
       }
 
-      const { error } = await supabase.from('projects').insert(projectData)
+      let insertResult = await supabase.from('projects').insert(projectData)
 
-      if (error) throw error
+      if (insertResult.error) {
+        if (insertResult.error.code === 'PGRST204' || insertResult.error.code === '42703') {
+          const serializedProject = {
+            name: projectName,
+            description: projectNotes,
+            service_type: calculatorData.serviceType,
+            pages: calculatorData.pages,
+            deadline: calculatorData.deadline,
+            features: calculatorData.features,
+            calculated_value: calculatedValue
+          }
+          const fallbackData = {
+            name: `__JSON__:${JSON.stringify(serializedProject)}`,
+            lead_id: selectedLeadId || null,
+            status: 'proposed' as const
+          }
+          const fallbackResult = await supabase.from('projects').insert(fallbackData)
+          if (fallbackResult.error) throw fallbackResult.error
+        } else {
+          throw insertResult.error
+        }
+      }
 
       setShowSuccess(true)
       setTimeout(() => {

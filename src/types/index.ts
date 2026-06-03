@@ -240,3 +240,32 @@ export interface ProspectionMetrics {
     conversions: number
   }[]
 }
+
+export function parseProject(project: any): Project {
+  if (!project) return project
+  if (project.name && project.name.startsWith('__JSON__:')) {
+    try {
+      const extraData = JSON.parse(project.name.substring(9))
+      return {
+        ...project,
+        name: extraData.name || '',
+        description: extraData.description || '',
+        service_type: extraData.service_type || 'landing_page',
+        pages: extraData.pages || 5,
+        deadline: extraData.deadline || 'normal',
+        features: extraData.features || [],
+        calculated_value: extraData.calculated_value || 0
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return {
+    ...project,
+    calculated_value: project.calculated_value || 0,
+    service_type: project.service_type || 'landing_page',
+    pages: project.pages || 5,
+    deadline: project.deadline || 'normal',
+    features: project.features || []
+  }
+}

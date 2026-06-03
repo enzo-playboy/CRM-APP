@@ -50,7 +50,7 @@ export default function DashboardLayout({
     <div className="min-h-screen font-body text-text-primary antialiased flex">
       <Sidebar />
       <Header />
-      <main className="w-full min-h-screen pt-20 pb-24 md:pt-8 md:pb-8 md:ml-72 px-4 md:px-8 flex flex-col gap-6">
+      <main className="w-full min-h-screen pt-20 pb-24 md:pt-24 md:pb-8 md:ml-72 px-4 md:px-8 flex flex-col gap-6">
         {children}
       </main>
     </div>
